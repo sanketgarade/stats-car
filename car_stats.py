@@ -204,21 +204,32 @@ def main(cardata_path, classes_path, outdir, show_plots):
     plt.close()
     print(f"Saved combined distribution plots to: {dist_out}")
 
-    # --- Model vs Color heatmap (separate image) ---
+    # --- Model vs Color heatmap (separate image, improved aesthetics) ---
     try:
+        import seaborn as sns  # Optional, makes styling easier
         heatmap_path = outdir / 'heatmap_model_color.png'
-        plt.figure(figsize=(12, max(6, ct.shape[0]*0.2)))
-        plt.imshow(ct.values, aspect='auto')
-        plt.colorbar()
-        plt.xticks(ticks=np.arange(ct.shape[1]), labels=ct.columns, rotation=45, ha='right')
-        plt.yticks(ticks=np.arange(ct.shape[0]), labels=ct.index)
-        plt.title('Heatmap: Model vs Color (counts)')
+
+        plt.figure(figsize=(12, max(6, ct.shape[0]*0.3)))
+        sns.heatmap(
+            ct,
+            annot=True,             # show counts in cells
+            fmt='d',
+            cmap='YlGnBu',          # light, visually balanced colormap
+            linewidths=0.5,         # subtle gridlines
+            linecolor='gray',
+            cbar_kws={'label': 'Count'}
+        )
+        plt.title('Heatmap: Model vs Color (counts)', fontsize=10, pad=12)
+        plt.xlabel('Color', fontsize=12)
+        plt.ylabel('Model', fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
         plt.tight_layout()
-        plt.savefig(heatmap_path)
+        plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
         if show_plots:
             plt.show()
         plt.close()
-        print(f"Saved heatmap to: {heatmap_path}")
+        print(f"Saved improved heatmap to: {heatmap_path}")
     except Exception as e:
         print('Could not draw heatmap:', e, file=sys.stderr)
 

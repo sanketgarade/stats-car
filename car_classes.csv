@@ -1,5 +1,6 @@
 Maker,Model,Class,Fuel
 Ford,Figo,Hatchback,Fossil
+Fiat,Punto,Hatchback,Fossil
 Honda,Amaze,Sedan,Fossil
 Honda,Brio,Hatchback,Fossil
 Honda,City,Sedan,Fossil
@@ -32,7 +33,7 @@ Mahindra,XUV300,SUV,Fossil
 Mahindra,XUV3XO,SUV,Fossil
 Mahindra,XUV400,SUV,Fossil
 Mahindra,XUV700,SUV,Fossil
-Maruti Suzuki,800,Hatchback,Fossil
+Maruti Suzuki,Maruti 800,Hatchback,Fossil
 Maruti Suzuki,Alto,Hatchback,Fossil
 Maruti Suzuki,Baleno,Hatchback,Fossil
 Maruti Suzuki,Brezza,SUV,Fossil
@@ -48,8 +49,10 @@ Maruti Suzuki,Swift,Hatchback,Fossil
 Maruti Suzuki,WagonR,Hatchback,Fossil
 Nissan,Magnite,SUV,Fossil
 Renault,Kiger,SUV,Fossil
+Renault,Scala,Sedan,Fossil
 Renault,Triber,MPV,Fossil
 Skoda,Kushaq,SUV,Fossil
+Skoda,Rapid,Sedan,Fossil
 Tata,Altroz,Hatchback,Fossil
 Tata,Harrier,SUV,Fossil
 Tata,Harrier EV,SUV,Electric
@@ -60,8 +63,10 @@ Tata,Punch EV,Compact SUV,Electric
 Tata,Safari,SUV,Fossil
 Tata,Tiago,Hatchback,Fossil
 Tata,Tigor,Sedan,Fossil
+Tata,Zest,Sedan,Fossil
 Toyota,Fortuner,SUV,Fossil
 Toyota,Glanza,Hatchback,Fossil
 Toyota,Innova,MPV,Fossil
 Toyota,Urban Cruiser,SUV,Fossil
+Volkswagen,Polo,Hatchback,Fossil
 Volkswagen,Taigun,SUV,Fossil
