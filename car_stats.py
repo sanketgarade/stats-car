@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
-"""car_stats_cli.py
+"""car_stats.py
+
+Modifications requested:
+- Do not plot the fuel type distribution (in the distribution grid).
+- Plot the vehicle model distribution for top 20 models
+- Replace deprecated applymap usage to avoid FutureWarning.
+- Plot the model vs color heatmap in a separate image file.
+- Do not print Cramer's V to terminal (but still compute/save contingency table).
 
 Usage:
-    python3 car_stats_cli.py --cardata cardata.csv --classes car_classes.csv
-Both arguments are optional; defaults are cardata.csv and car_classes.csv in the working directory.
+    python3 car_stats_cli_updated2.py --cardata cardata.csv --classes car_classes.csv --outdir ./car_stats_plots --show
 
-What it does:
-- Loads the survey data (cardata) and the car classes data (car_classes).
-- Merges them on Maker+Model (case-insensitive) to attach Class and Fuel to each observed row.
-- Produces frequency distributions for Model, Color, Maker, Class, and Fuel.
-- Produces bar plots for these distributions and boxplots of counts per Maker, Class, and Fuel.
-- Computes contingency table (Model x Color) and Cramér's V for association strength.
-- Saves plots into ./car_stats_plots/ and prints summary to stdout.
-
-Requirements:
-- pandas, numpy, matplotlib
-- scipy (optional, used for chi-square); script has fallback if scipy is not present.
+Requirements: pandas, numpy, matplotlib, (optional scipy)
 """
 
 import argparse
@@ -24,7 +20,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-import os
 
 try:
     from scipy.stats import chi2_contingency
@@ -32,8 +27,13 @@ try:
 except Exception:
     SCIPY_AVAILABLE = False
 
+def normalize_string(s):
+    if pd.isna(s):
+        return ''
+    return str(s).strip().lower()
+
 def cramers_v(confusion_matrix):
-    """Compute Cramér's V statistic for categorical-categorical association."""
+    # kept for potential future use but will not be printed
     n = confusion_matrix.sum().sum()
     if n == 0:
         return float('nan')
@@ -49,7 +49,6 @@ def cramers_v(confusion_matrix):
             chi2 = np.nansum(chi2)
     phi2 = chi2 / n
     r, k = confusion_matrix.shape
-    # Bias correction
     phi2corr = max(0, phi2 - ((k-1)*(r-1))/(n-1))
     rcorr = r - ((r-1)**2)/(n-1)
     kcorr = k - ((k-1)**2)/(n-1)
@@ -58,11 +57,6 @@ def cramers_v(confusion_matrix):
         return float('nan')
     v = np.sqrt(phi2corr / denom)
     return v
-
-def normalize_string(s):
-    if pd.isna(s):
-        return ''
-    return str(s).strip().lower()
 
 def main(cardata_path, classes_path, outdir, show_plots):
     cardata_path = Path(cardata_path)
@@ -77,26 +71,24 @@ def main(cardata_path, classes_path, outdir, show_plots):
         print(f"WARNING: classes file not found: {classes_path}. Will proceed but Class/Fuel will be unknown.", file=sys.stderr)
 
     df = pd.read_csv(cardata_path)
-    # Normalize column names
     df.columns = [c.strip() for c in df.columns]
 
-    # Load classes if provided
+    # Load classes
     if classes_path.exists():
         classes = pd.read_csv(classes_path)
         classes.columns = [c.strip() for c in classes.columns]
-        # Create lowercase keys for robust merge: maker+model
         classes['_maker_l'] = classes['Maker'].apply(normalize_string)
         classes['_model_l'] = classes['Model'].apply(normalize_string)
         classes_keyed = classes.set_index(['_maker_l','_model_l'])[['Class','Fuel']].drop_duplicates()
     else:
-        classes = None
         classes_keyed = None
+        classes = pd.DataFrame(columns=['Maker','Model','Class','Fuel'])
 
-    # prepare df keys
+    # Prepare keys in survey data
     df['_maker_l'] = df['Maker'].apply(normalize_string)
     df['_model_l'] = df['Model'].apply(normalize_string)
 
-    # Merge by maker+model (case-insensitive)
+    # Merge
     if classes_keyed is not None:
         merged = df.merge(classes_keyed, left_on=['_maker_l','_model_l'], right_index=True, how='left')
     else:
@@ -104,9 +96,9 @@ def main(cardata_path, classes_path, outdir, show_plots):
         merged['Class'] = pd.NA
         merged['Fuel'] = pd.NA
 
-    # If Class or Fuel missing, attempt a looser match on Model only (helps when Maker naming differs)
+    # Loose model-only match for missing entries
     missing_mask = merged['Class'].isna() | merged['Fuel'].isna()
-    if missing_mask.any() and classes_keyed is not None:
+    if missing_mask.any() and not classes.empty:
         model_map = classes.set_index(classes['Model'].apply(normalize_string))[['Class','Fuel']].to_dict(orient='index')
         for idx, row in merged[missing_mask].iterrows():
             mkey = normalize_string(row['Model'])
@@ -116,109 +108,127 @@ def main(cardata_path, classes_path, outdir, show_plots):
                 if pd.isna(merged.at[idx, 'Fuel']):
                     merged.at[idx, 'Fuel'] = model_map[mkey]['Fuel']
 
-    # Fill remaining unknowns
     merged['Class'] = merged['Class'].fillna('Unknown')
     merged['Fuel'] = merged['Fuel'].fillna('Unknown')
 
-    # Save merged file
+    # Save merged
     merged_out = outdir / 'cardata_merged.csv'
     merged.to_csv(merged_out, index=False)
     print(f"Merged data saved to: {merged_out}")
 
-    # --- Frequency distributions ---
-    print('\n=== Frequency distributions (top 20) ===')
-    print('\nModels:')
-    print(merged['Model'].value_counts().head(20))
-    print('\nColors:')
-    print(merged['Color'].value_counts().head(20))
-    print('\nMakers:')
-    print(merged['Maker'].value_counts().head(20))
-    print('\nClasses:')
-    print(merged['Class'].value_counts().head(20))
-    print('\nFuels:')
-    print(merged['Fuel'].value_counts().head(20))
+    # Print rows with any Unknown or missing values
+    unknown_mask = merged[['Maker','Model','Color','Class','Fuel']].isna().any(axis=1)
+    # Replace deprecated applymap usage: use column-wise comparison and combine
+    contains_unknown = (
+        (merged['Maker'].astype(str).str.strip().str.lower() == 'unknown') |
+        (merged['Model'].astype(str).str.strip().str.lower() == 'unknown') |
+        (merged['Color'].astype(str).str.strip().str.lower() == 'unknown') |
+        (merged['Class'].astype(str).str.strip().str.lower() == 'unknown') |
+        (merged['Fuel'].astype(str).str.strip().str.lower() == 'unknown')
+    )
+    problem_rows = merged[unknown_mask | contains_unknown]
+    if not problem_rows.empty:
+        print("\n=== Rows with missing or Unknown values ===")
+        pd.set_option('display.max_columns', None)
+        print(problem_rows.to_string(index=False))
+    else:
+        print("\nNo rows with missing or 'Unknown' values found.")
 
-    # Save frequency tables
-    merged['Model'].value_counts().to_csv(outdir / 'freq_model.csv', header=['Count'])
-    merged['Color'].value_counts().to_csv(outdir / 'freq_color.csv', header=['Count'])
-    merged['Maker'].value_counts().to_csv(outdir / 'freq_maker.csv', header=['Count'])
-    merged['Class'].value_counts().to_csv(outdir / 'freq_class.csv', header=['Count'])
-    merged['Fuel'].value_counts().to_csv(outdir / 'freq_fuel.csv', header=['Count'])
+    # Frequency distributions
+    model_counts = merged['Model'].value_counts()
+    color_counts = merged['Color'].value_counts()
+    maker_counts = merged['Maker'].value_counts()
+    class_counts = merged['Class'].value_counts()
+    fuel_counts = merged['Fuel'].value_counts()
 
-    # --- Contingency and Cramér's V ---
+    # Save frequency CSVs
+    model_counts.to_csv(outdir / 'freq_model.csv', header=['Count'])
+    color_counts.to_csv(outdir / 'freq_color.csv', header=['Count'])
+    maker_counts.to_csv(outdir / 'freq_maker.csv', header=['Count'])
+    class_counts.to_csv(outdir / 'freq_class.csv', header=['Count'])
+    fuel_counts.to_csv(outdir / 'freq_fuel.csv', header=['Count'])
+
+    # Contingency and heatmap
     ct = pd.crosstab(merged['Model'], merged['Color'])
     ct.to_csv(outdir / 'contingency_model_color.csv')
-    v = cramers_v(ct)
-    print(f"\nCramér's V between Model and Color: {v:.4f}")
 
-    # --- Plots ---
-    def save_bar(series, title, fname):
-        plt.figure(figsize=(10,5))
-        series.sort_values(ascending=False).plot(kind='bar')
-        plt.title(title)
-        plt.xlabel(series.name if series.name is not None else 'Category')
-        plt.ylabel('Count')
-        plt.tight_layout()
-        path = outdir / fname
-        plt.savefig(path)
-        if show_plots:
-            plt.show()
-        plt.close()
-        print(f"Saved: {path}")
+    # Compute Cramer's V silently (do not print)
+    _ = cramers_v(ct)
 
-    def save_box_from_counts(counts_series, title, fname):
-        # counts_series is Series indexed by group, values are counts
-        plt.figure(figsize=(6,4))
-        # Boxplot requires a sequence; we provide the counts
-        plt.boxplot(counts_series.values, vert=True)
-        plt.title(title)
-        plt.ylabel('Counts')
-        plt.tight_layout()
-        path = outdir / fname
-        plt.savefig(path)
-        if show_plots:
-            plt.show()
-        plt.close()
-        print(f"Saved: {path}")
+    # --- Combined Boxplots (single image) ---
+    box_out = outdir / 'combined_boxplots.png'
+    fig, axes = plt.subplots(1, 3, figsize=(14,5))
+    # Maker
+    axes[0].boxplot(maker_counts.values)
+    axes[0].set_title('Counts per Maker')
+    axes[0].set_ylabel('Counts')
+    # Class
+    axes[1].boxplot(class_counts.values)
+    axes[1].set_title('Counts per Class')
+    # Fuel (kept in boxplots)
+    axes[2].boxplot(fuel_counts.values)
+    axes[2].set_title('Counts per Fuel')
+    plt.tight_layout()
+    plt.savefig(box_out)
+    if show_plots:
+        plt.show()
+    plt.close()
+    print(f"Saved combined boxplots to: {box_out}")
 
-    # Basic bar charts
-    save_bar(merged['Model'].value_counts(), 'Model frequency', 'model_freq.png')
-    save_bar(merged['Color'].value_counts(), 'Color frequency', 'color_freq.png')
-    save_bar(merged['Maker'].value_counts(), 'Maker frequency', 'maker_freq.png')
-    save_bar(merged['Class'].value_counts(), 'Class frequency', 'class_freq.png')
-    save_bar(merged['Fuel'].value_counts(), 'Fuel frequency', 'fuel_freq.png')
+    # --- Combined Distribution Plots (single image) ---
+    # Now include ALL models (not top X)
+    dist_out = outdir / 'combined_distributions.png'
+    fig, axes = plt.subplots(2, 2, figsize=(14,10))
+    axes = axes.flatten()
+    # Model (ALL)
+    model_counts.nlargest(20).plot(kind='bar', ax=axes[0])
+    axes[0].set_title('Model (top 20)')
+    axes[0].tick_params(axis='x', rotation=45)
+    # Color (top 12)
+    color_counts.nlargest(12).plot(kind='bar', ax=axes[1])
+    axes[1].set_title('Color (top 12)')
+    axes[1].tick_params(axis='x', rotation=45)
+    # Maker (all)
+    maker_counts.plot(kind='bar', ax=axes[2])
+    axes[2].set_title('Maker')
+    axes[2].tick_params(axis='x', rotation=45)
+    # Class
+    class_counts.plot(kind='bar', ax=axes[3])
+    axes[3].set_title('Class')
+    axes[3].tick_params(axis='x', rotation=45)
 
-    # Boxplots of per-group counts (numeric distribution of counts)
-    save_box_from_counts(merged['Maker'].value_counts(), 'Boxplot of counts per Maker', 'box_maker_counts.png')
-    save_box_from_counts(merged['Class'].value_counts(), 'Boxplot of counts per Class', 'box_class_counts.png')
-    save_box_from_counts(merged['Fuel'].value_counts(), 'Boxplot of counts per Fuel', 'box_fuel_counts.png')
+    plt.tight_layout()
+    plt.savefig(dist_out)
+    if show_plots:
+        plt.show()
+    plt.close()
+    print(f"Saved combined distribution plots to: {dist_out}")
 
-    # Heatmap for contingency table (Model x Color)
+    # --- Model vs Color heatmap (separate image) ---
     try:
-        plt.figure(figsize=(10,6))
+        heatmap_path = outdir / 'heatmap_model_color.png'
+        plt.figure(figsize=(12, max(6, ct.shape[0]*0.2)))
         plt.imshow(ct.values, aspect='auto')
         plt.colorbar()
         plt.xticks(ticks=np.arange(ct.shape[1]), labels=ct.columns, rotation=45, ha='right')
         plt.yticks(ticks=np.arange(ct.shape[0]), labels=ct.index)
         plt.title('Heatmap: Model vs Color (counts)')
         plt.tight_layout()
-        heatmap_path = outdir / 'heatmap_model_color.png'
         plt.savefig(heatmap_path)
         if show_plots:
             plt.show()
         plt.close()
-        print(f"Saved: {heatmap_path}")
+        print(f"Saved heatmap to: {heatmap_path}")
     except Exception as e:
         print('Could not draw heatmap:', e, file=sys.stderr)
 
-    print('\nAll plots and CSVs are saved in the folder:', outdir.resolve())
-
+    print(f"\nAll outputs saved in: {outdir.resolve()}")
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser(description='Compute statistics and plots for surveyed car data.')
+    p = argparse.ArgumentParser(description='Compute statistics and combined plots for surveyed car data.')
     p.add_argument('--cardata', default='cardata.csv', help='CSV file with observed cars (default cardata.csv)')
     p.add_argument('--classes', default='car_classes.csv', help='CSV file with maker/model -> class,fuel (default car_classes.csv)')
     p.add_argument('--outdir', default='./car_stats_plots', help='Folder to save outputs (default ./car_stats_plots)')
-    p.add_argument('--show', action='store_true', help='Show plots interactively (can be used in notebook/desktop env)')
+    p.add_argument('--show', action='store_true', help='Show plots interactively')
     args = p.parse_args()
     main(args.cardata, args.classes, args.outdir, args.show)
