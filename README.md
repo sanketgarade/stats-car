@@ -1,5 +1,10 @@
 # stats-car
 
+### preparation
+
+- collect the car data in the format shown in the csv file in the `sample` folder.
+- update the `car_classes.csv` file (if any data is missing/needs correction).
+
 ### how to use
 
 run help command
@@ -22,3 +27,5 @@ if you have the default inputs ready as shown in the help command, just run the 
 ```
 % python car_stats.py
 ```
+
+
