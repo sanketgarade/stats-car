@@ -4,6 +4,12 @@ a fun project to plot statistical data about car collections (such as in housing
 
 collect your own data, and use the this tool to plot the results.
 
+example output:
+
+<img width="1400" height="1000" alt="combined_distributions" src="https://github.com/user-attachments/assets/2092e616-f545-4ad6-9929-e83bf6ce39be" />
+
+
+
 ### preparation
 
 - collect the car data in the format shown in the csv file in the `sample` folder. save it in a `cardata.csv` file.
