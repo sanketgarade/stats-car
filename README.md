@@ -1,13 +1,22 @@
 # stats-car
 
+a fun project to plot statistical data about car collections (such as in housing societies).
+
+collect your own data, and use the this tool to plot the results.
+
 ### preparation
 
-- collect the car data in the format shown in the csv file in the `sample` folder.
+- collect the car data in the format shown in the csv file in the `sample` folder. save it in a `cardata.csv` file.
 - update the `car_classes.csv` file (if any data is missing/needs correction).
 
 ### how to use
 
-run help command
+if you have the default files ready as shown in the help, just run the below command, and the output files will be saved in the `car_stats_plots` folder.
+```
+% python car_stats.py
+```
+
+#### help
 
 ```
 % python car_stats.py -h
@@ -23,9 +32,4 @@ options:
   --show             Show plots interactively
 ```
 
-if you have the default inputs ready as shown in the help command, just run the below command, and the output data will be saved in the `car_stats_plots` folder.
-```
-% python car_stats.py
-```
-
-
+Do send a pull request or raise an issue if you find something wrong with the `car_classes.csv` file, or want to fix/improvem anything else too.
